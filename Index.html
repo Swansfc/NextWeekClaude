@@ -1,0 +1,141 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>NextWeek (TVmaze)</title><style>
+:root{--bg:#0b0b0f;--c:#16161f;--b:#2c2c3a;--t:#fff;--m:#9a9aae;--a:#7c5cff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px)}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]){--bg:#f3f3f8;--c:#fff;--b:#dcdce6;--t:#111;--m:#666}}
+html,body{margin:0;height:100%}body{font-family:system-ui,Arial,sans-serif;background:var(--bg);color:var(--t);padding-bottom:calc(70px + env(safe-area-inset-bottom,0px))}
+.top{position:sticky;top:0;background:var(--c);padding:10px 14px;z-index:5;border-bottom:1px solid var(--b)}
+h2{margin:0 0 8px;font-size:18px}input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:16px}
+#sr{position:absolute;left:14px;right:14px;background:var(--c);border:1px solid var(--b);border-radius:10px;margin-top:4px;overflow:hidden}
+#sr div{padding:10px 12px;border-bottom:1px solid var(--b)}#sr small,.m{color:var(--m)}
+main{padding:12px 14px}.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:10px 12px;margin:8px 0;display:flex;gap:8px;align-items:center}
+.card .g{flex:1;min-width:0}.card small{display:block;color:var(--m)}
+.day{border-radius:12px;padding:2px 0;min-height:30px}.day.over{outline:2px dashed var(--a)}
+h3{margin:14px 0 2px;font-size:14px;color:var(--m);text-transform:uppercase}
+button{background:none;border:0;color:var(--t);font-size:20px;padding:6px;cursor:pointer}
+.h{color:#ff4d6d}.hd{cursor:grab;touch-action:none;color:var(--m)}.drag{opacity:.5}
+.menu{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 8px}.menu button{font-size:13px;background:var(--c);border:1px solid var(--b);border-radius:8px;padding:6px 10px}
+.bottom{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--c);border-top:1px solid var(--b);padding-bottom:env(safe-area-inset-bottom,0px)}.bottom button{flex:1;padding:12px}.bottom .on{border-top:2px solid var(--a)}
+.lk{color:var(--a);cursor:pointer}details{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:8px 12px;margin:8px 0}summary{cursor:pointer;padding:4px 0}
+.ep{display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--b);font-size:14px}.ep span{flex:1}
+.note{font-size:12px;color:var(--m);margin-top:16px}
+</style></head><body>
+<div class="top"><h2>📅 NextWeek</h2><input id="q" placeholder="Sök serie, film, lag, liga…" autocomplete="off"><div id="sr" hidden></div></div>
+<main id="m"></main>
+<nav class="bottom"><button data-a="tab" data-v="week">📅</button><button data-a="tab" data-v="film">🎬</button><button data-a="tab" data-v="series">📺</button><button data-a="tab" data-v="sport">⚽</button><button data-a="tab" data-v="fav">❤️</button></nav>
+<script>
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const T=new Date(),today=iso(T);
+const add=(s,n)=>{const d=new Date(s+'T12:00');d.setDate(d.getDate()+n);return iso(d)};
+const DN=['sön','mån','tis','ons','tors','fre','lör'];
+const fmt=s=>{const d=new Date(s+'T12:00');return DN[d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1)};
+const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
+const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let seed=7;const rnd=()=>(seed=seed*16807%2147483647)/2147483647;
+// ---- Data (exempeldata) ----
+const LG=[['pl','Premier League','⚽','Viaplay · Prime Video','Arsenal,Aston Villa,Bournemouth,Brentford,Brighton,Chelsea,Coventry,Crystal Palace,Everton,Fulham,Hull,Ipswich,Leeds,Liverpool,Man City,Man United,Newcastle,Nottm Forest,Sunderland,Tottenham'],
+['ch','Championship','⚽','Viaplay','Leeds,Leicester,Southampton,Norwich,Sunderland,Burnley'],
+['al','Allsvenskan','⚽','C More · TV4','Malmö FF,AIK,Djurgården,Hammarby,IFK Göteborg,Häcken,Elfsborg,Mjällby'],
+['cl','Champions League','⚽','TV4 · Max','Real Madrid,Barcelona,Bayern,PSG,Inter,Arsenal,Liverpool,Dortmund'],
+['bl','Bundesliga','⚽','Viaplay','Bayern,Dortmund,Leverkusen,Leipzig,Frankfurt,Stuttgart'],
+['ll','La Liga','⚽','Viaplay','Real Madrid,Barcelona,Atlético,Sevilla,Villarreal,Girona'],
+['sa','Serie A','⚽','TV4 · Max','Inter,Milan,Juventus,Napoli,Roma,Lazio'],
+['nh','NHL','🏒','Viaplay · V Sport','Rangers,Bruins,Oilers,Maple Leafs,Avalanche,Panthers'],
+['nf','NFL','🏈','Viaplay · V Sport','Chiefs,Eagles,49ers,Cowboys,Bills,Ravens'],
+['nb','NBA','🏀','Viaplay · V Sport','Lakers,Celtics,Warriors,Knicks,Nuggets,Bucks'],
+['f1','F1','🏎️','Viaplay · V Sport F1','']];
+const TM=['13:30','15:00','16:00','18:30','20:45','21:00'];
+const FX=[];const REAL=new Set(['pl']);
+const PLV='Viaplay',PRM='Prime Video';
+[['10-10','13:30','Arsenal','Leeds',PRM],['10-10','16:00','Sunderland','Brighton',PLV],['10-10','16:00','Aston Villa','Brentford',PLV],['10-10','16:00','Chelsea','Bournemouth',PLV],['10-10','16:00','Ipswich','Fulham',PLV],['10-10','18:30','Man United','Tottenham',PLV],
+['10-11','15:00','Crystal Palace','Nottm Forest',PLV],['10-11','15:00','Hull','Everton',PLV],['10-11','17:30','Liverpool','Man City',PLV],['10-12','21:00','Coventry','Newcastle',PLV],
+['10-17','13:30','Everton','Chelsea',PRM],['10-17','16:00','Man City','Ipswich',PLV],['10-17','16:00','Brentford','Liverpool',PLV],['10-17','16:00','Fulham','Hull',PLV],['10-17','18:30','Newcastle','Aston Villa',PLV],
+['10-18','15:00','Leeds','Man United',PLV],['10-18','15:00','Bournemouth','Sunderland',PLV],['10-18','15:00','Brighton','Crystal Palace',PLV],['10-18','17:30','Nottm Forest','Arsenal',PLV],['10-19','21:00','Tottenham','Coventry',PLV]]
+.forEach(x=>FX.push({lg:'pl',d:'2026-'+x[0],t:x[1],h:x[2],a:x[3],c:x[4]}));
+LG.forEach(l=>{if(l[0]=='pl')return;const tm=l[4]?l[4].split(','):[];
+ if(!tm.length){['USA GP','Mexikos GP','Brasiliens GP','Las Vegas GP'].forEach((r,i)=>FX.push({lg:l[0],h:r,a:'',d:add(today,3+i*7),t:'21:00'}));return}
+ for(let w=0;w<5;w++){const s=tm.slice().sort(()=>rnd()-.5);for(let i=0;i+1<s.length;i+=2)FX.push({lg:l[0],h:s[i],a:s[i+1],d:add(today,w*7+Math.floor(rnd()*6)),t:TM[Math.floor(rnd()*TM.length)]})}});
+FX.sort((x,y)=>x.d.localeCompare(y.d)||x.t.localeCompare(y.t));
+const LGM=Object.fromEntries(LG.map(l=>[l[0],l]));
+const TEAMS=[...new Set(LG.flatMap(l=>l[4].split(',').filter(Boolean)))];
+const IDX=[...TEAMS.map(t=>({k:'team',n:t,s:'Lag'})),...LG.filter(l=>l[4]).map(l=>({k:'lg',n:l[1],id:l[0],s:'Liga'}))];
+// ---- State ----
+let cal=ld('nw_cal2',null)||[{id:1,ic:'⚽',t:'Arsenal – Leeds',s:'Prime Video · 13:30',d:'2026-10-10'}];
+let fav=ld('nw_fav',[]),st={tab:'week',pg:null,menu:null},reg=[];
+const save=()=>{sv('nw_cal2',cal);sv('nw_fav',fav);sv('nw_ft',favT)};
+const hr=(k,n)=>`<button class="h" data-a="fav" data-v="${k}" data-n="${n?encodeURIComponent(n):''}">${fav.includes(k)?'♥':'♡'}</button>`;
+const R=o=>(reg.push(o),reg.length-1);
+const addBtn=(o,pick)=>`<button data-a="add" data-v="${R(o)}" data-p="${pick?1:''}">➕</button>`;
+function pick(cb){const i=document.createElement('input');i.type='date';i.min=today;i.style.cssText='position:fixed;opacity:0;top:50%;left:50%';document.body.appendChild(i);i.onchange=()=>{if(i.value)cb(i.value);i.remove()};try{i.showPicker()}catch(e){i.click()}}
+const tl=n=>`<span class="lk" data-a="pg" data-v="team:${n}">${n}</span>`;
+const fxRow=f=>{const l=LGM[f.lg];return `<div class="card"><div class="g"><small>${fmt(f.d)} · ${f.t}</small>${f.a?tl(f.h)+' – '+tl(f.a):f.h}<small>${l[1]} · 📺 ${f.c||l[3]}${REAL.has(f.lg)?'':' · exempel'}</small></div>${addBtn({ic:l[2],t:f.a?f.h+' – '+f.a:f.h,s:(f.c||l[3])+' · '+f.t,d:f.d})}</div>`};
+const back=()=>`<button data-a="back">← Tillbaka</button>`;
+// ---- Views ----
+function week(){let h='';const end=add(today,6);
+ for(let i=0;i<7;i++){const d=add(today,i),it=cal.filter(c=>c.d===d);h+=`<h3>${i==0?'Idag':i==1?'Imorgon':fmt(d)}</h3><div class="day" data-day="${d}">${it.map(item).join('')||'<span class="m">—</span>'}</div>`}
+ const lt=cal.filter(c=>c.d>end).sort((a,b)=>a.d.localeCompare(b.d));
+ if(lt.length)h+=`<h3>Senare</h3>`+lt.map(c=>item(c,1)).join('');
+ return h+`<p class="note">Dra ⠿ för att flytta mellan dagar, eller tryck ⋯. Matcher/tider är exempeldata.</p>`}
+function item(c,late){return `<div class="card" id="i${c.id}"><span class="hd" data-drag="${c.id}">⠿</span><div class="g">${c.ic} <b>${c.t}</b><small>${late?fmt(c.d)+' · ':''}${c.s}</small></div><button data-a="menu" data-v="${c.id}">⋯</button></div>`+(st.menu==c.id?`<div class="menu"><button data-a="mv" data-v="${c.id}:tom">Imorgon</button><button data-a="mv" data-v="${c.id}:nw">Nästa vecka</button><button data-a="mv" data-v="${c.id}:pick">Annan dag</button><button data-a="mv" data-v="${c.id}:del">🗑 Ta bort</button></div>`:'')}
+function sport(){return `<h3>Ligor & serier</h3>`+LG.map(l=>`<div class="card"><div class="g lk" data-a="pg" data-v="lg:${l[0]}">${l[2]} ${l[1]}<small>📺 ${l[3]}</small></div>${hr('l:'+l[0])}</div>`).join('')}
+function lgPage(id){const l=LGM[id];return back()+`<h2>${l[2]} ${l[1]} ${hr('l:'+id)}</h2><p class="m">📺 ${l[3]} · kommande 30 dagar</p>`+(l[4]?`<h3>Lag</h3><div class="card" style="flex-wrap:wrap">${l[4].split(',').map(t=>tl(t)+' '+hr('t:'+t)).join('')}</div>`:'')+`<h3>Matcher</h3><p class="note">${REAL.has(id)?'✅ Verkliga tider (hämtade '+today+'). Visar omgång 6–7, t.o.m. 19 okt – fler läggs till när tiderna fastställs. Tider i svensk tid.':'⚠️ Exempeldata – inte riktiga matcher än.'}</p>`+FX.filter(f=>f.lg==id&&f.d<=add(today,30)).map(fxRow).join('')}
+function teamPage(n){return back()+`<h2>${n} ${hr('t:'+n)}</h2><p class="m">Kommande 30 dagar</p>`+(FX.filter(f=>(f.h==n||f.a==n)&&f.d<=add(today,30)).map(fxRow).join('')||'<p class="m">Inga matcher hittades.</p>')}
+let favT=ld('nw_ft',{}),rid=0;const C={};
+const pad=n=>String(n).padStart(2,'0'),yr=d=>d?d.slice(0,4):'';
+const ATTR='<p class="note">Data: TVmaze.com (CC BY-SA). Datum och tider följer originalsändningen och kan skilja sig i Sverige.</p>';
+const tv=async p=>{if(C[p])return C[p];const r=await fetch('https://api.tvmaze.com'+p);if(!r.ok)throw new Error('TVmaze-fel '+r.status);return C[p]=await r.json()};
+const strip=h=>(h||'').replace(/<[^>]+>/g,'');
+const svc=x=>(x.webChannel&&x.webChannel.name)||(x.network&&x.network.name)||'';
+const lab=e=>e.number?'S'+pad(e.season)+'E'+pad(e.number):'Special';
+const tcard=(x,sub)=>`<div class="card">${x.image?`<img src="${x.image.medium.replace('http:','https:')}" width="46" height="66" style="border-radius:6px;object-fit:cover" alt="">`:'<span style="width:46px;text-align:center">🎞️</span>'}<div class="g lk" data-a="pg" data-v="tv:${x.id}"><b>${x.name}</b><small>${[svc(x),sub].filter(Boolean).join(' · ')}</small></div>${hr('v:'+x.id,x.name)}</div>`;
+const uniq=arr=>{const m=new Map();arr.forEach(e=>{const s=e.show||(e._embedded&&e._embedded.show);if(s&&!m.has(s.id))m.set(s.id,{s,e})});return[...m.values()]};
+async function seriesTab(){const days=Array.from({length:7},(_,i)=>add(today,i));
+ const web=uniq((await Promise.all(days.map(d=>tv('/schedule/web?date='+d).catch(()=>[])))).flat()).sort((a,b)=>(b.s.weight||0)-(a.s.weight||0)).slice(0,20);
+ const se=uniq((await Promise.all(days.slice(0,3).map(d=>tv('/schedule?country=SE&date='+d).catch(()=>[])))).flat()).sort((a,b)=>(b.s.weight||0)-(a.s.weight||0)).slice(0,15);
+ const row=({s,e})=>tcard(s,lab(e)+' · '+fmt(e.airdate)+(e.airtime?' '+e.airtime:''));
+ return `<h3>Populärt på streaming – kommande 7 dagar</h3>`+(web.map(row).join('')||'<p class="m">Inget hittades.</p>')+`<h3>I svensk tv – kommande 3 dagar</h3>`+(se.map(row).join('')||'<p class="m">Inget hittades.</p>')+ATTR}
+function filmTab(){return `<h3>Film</h3><div class="card"><div class="g">🎬 Filmer kommer i nästa steg.<small>TVmaze har bara serier.</small></div></div>`}
+async function tvPage(id){const x=await tv(`/shows/${id}?embed[]=episodes`),E=(x._embedded&&x._embedded.episodes)||[],t=x.name,sn=svc(x);
+ const by={};E.forEach(e=>(by[e.season]=by[e.season]||[]).push(e));const ss=Object.keys(by).map(Number).sort((a,b)=>a-b);
+ const up=E.filter(e=>e.airdate&&e.airdate>=today).sort((a,b)=>a.airdate.localeCompare(b.airdate)).slice(0,8);
+ const ad=e=>addBtn({ic:'📺',t:t+' '+lab(e),s:sn+(e.airtime?' · '+e.airtime:''),d:e.airdate});
+ return back()+`<h2>📺 ${t} ${hr('v:'+id,t)}</h2><p class="m">${yr(x.premiered)} · ${x.status}${ss.length?' · '+ss.length+' säsonger':''}${x.rating&&x.rating.average?' · ⭐ '+x.rating.average:''}</p><div class="card"><div class="g">📡 <b>${sn||'Okänd kanal/tjänst'}</b><small>Originalsändare (inte säker svensk tjänst)</small></div></div>`+(x.summary?`<p>${strip(x.summary)}</p>`:'')+`<h3>Kommande avsnitt</h3>`+(up.length?up.map(e=>`<div class="card"><div class="g"><b>${lab(e)} ${e.name||''}</b><small>${fmt(e.airdate)}${e.airtime?' · '+e.airtime:''}</small></div>${ad(e)}</div>`).join(''):'<p class="m">Inga kommande avsnitt annonserade.</p>')+`<h3>Säsonger</h3>`+ss.map((n,i)=>`<details${i==ss.length-1?' open':''}><summary>${n?'Säsong '+n:'Specialavsnitt'} (${by[n].length} avsnitt)</summary>${by[n].map(e=>`<div class="ep"><span>${lab(e)} ${e.name||''}</span><span class="m">${e.airdate?fmt(e.airdate)+(e.airdate<today?' ✓':''):'?'}</span>${e.airdate&&e.airdate>=today?ad(e):''}</div>`).join('')}</details>`).join('')+ATTR}
+function favs(){const g=p=>fav.filter(k=>k[0]==p).map(k=>k.slice(2)),nm=k=>LGM[k]?LGM[k][1]:k;
+ const row=(ic,k,v,key,n)=>`<div class="card"><div class="g lk" data-a="pg" data-v="${k}:${v}">${ic} ${n||nm(v)}</div>${hr(key,n)}</div>`;
+ const out=[...g('l').map(v=>row('🏆','lg',v,'l:'+v)),...g('t').map(v=>row('⚽','team',v,'t:'+v)),...g('v').map(v=>row('📺','tv',v,'v:'+v,favT['v:'+v]||'Serie '+v)),...g('m').map(v=>row('🎬','mv',v,'m:'+v,favT['m:'+v]||'Film '+v))];
+ return `<h3>Favoriter</h3>`+(out.join('')||'<p class="m">Tryck på ♡ vid ett lag, en liga, serie eller film.</p>')}
+async function view(){if(st.pg){const[k,...r]=st.pg.split(':'),v=r.join(':');if(k=='lg')return lgPage(v);if(k=='team')return teamPage(v);return tvPage(v)}
+ return {week,film:filmTab,series:seriesTab,sport,fav:favs}[st.tab]()}
+async function render(){reg=[];const m=document.getElementById('m'),my=++rid;
+ if(/^tv/.test(st.pg||'')||(!st.pg&&st.tab=='series'))m.innerHTML='<p class="m">Laddar…</p>';
+ let h;try{h=await view()}catch(e){h=`<p class="m">⚠️ Kunde inte hämta data (${e.message}). Kontrollera uppkopplingen.</p>`}
+ if(my!=rid)return;m.innerHTML=h;
+ document.querySelectorAll('.bottom button').forEach(b=>b.classList.toggle('on',b.dataset.v==st.tab&&!st.pg))}
+// ---- Events ----
+function move(id,d){const c=cal.find(x=>x.id==id);if(c){c.d=d;save()}st.menu=null;render()}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a,v=b.dataset.v;
+ if(!b.closest('#sr'))hideSr();
+ if(a=='tab'){st={tab:v,pg:null,menu:null};scrollTo(0,0)}
+ else if(a=='pg'){st.pg=v;scrollTo(0,0)}
+ else if(a=='back')st.pg=null;
+ else if(a=='fav'){fav=fav.includes(v)?fav.filter(x=>x!=v):[...fav,v];if(b.dataset.n)favT[v]=decodeURIComponent(b.dataset.n);save()}
+ else if(a=='menu')st.menu=st.menu==v?null:v;
+ else if(a=='add'){const o=reg[v],go=d=>{if(!cal.some(c=>c.t==o.t&&c.d==d))cal.push({...o,d,id:Date.now()});save();b.textContent='✅'};if(b.dataset.p)pick(go);else go(o.d);return}
+ else if(a=='mv'){const[id,md]=v.split(':'),c=cal.find(x=>x.id==id);
+  if(md=='tom')return move(id,add(today,1));if(md=='nw')return move(id,add(c.d,7));
+  if(md=='del'){cal=cal.filter(x=>x.id!=id);save();st.menu=null}
+  else return pick(d=>move(id,d))}
+ else if(a=='sr'){st.pg=v;hideSr();q.value='';scrollTo(0,0)}
+ render()});
+// drag
+let dr=null;
+document.addEventListener('pointerdown',e=>{const h=e.target.closest('[data-drag]');if(!h)return;e.preventDefault();dr=h.dataset.drag;h.setPointerCapture(e.pointerId);h.closest('.card').classList.add('drag')});
+document.addEventListener('pointermove',e=>{if(!dr)return;document.querySelectorAll('.day').forEach(d=>d.classList.remove('over'));const t=document.elementFromPoint(e.clientX,e.clientY),d=t&&t.closest('[data-day]');if(d)d.classList.add('over')});
+document.addEventListener('pointerup',e=>{if(!dr)return;const t=document.elementFromPoint(e.clientX,e.clientY),d=t&&t.closest('[data-day]'),id=dr;dr=null;d?move(id,d.dataset.day):render()});
+// search
+const q=document.getElementById('q'),sr=document.getElementById('sr');
+function hideSr(){sr.hidden=true}
+const showSr=r=>{sr.innerHTML=r.map(x=>`<div data-a="sr" data-v="${x.k}:${x.v}">${x.n}<br><small>${x.s}</small></div>`).join('')||'<div class="m">Söker…</div>';sr.hidden=false};
+let sT;q.oninput=()=>{clearTimeout(sT);const v=q.value.trim();if(!v)return hideSr();const lv=v.toLowerCase();
+ const loc=IDX.filter(x=>x.n.toLowerCase().split(' ').some(w=>w.startsWith(lv))||x.n.toLowerCase().startsWith(lv)).slice(0,4).map(x=>({k:x.k,n:x.n,s:x.s,v:x.id||x.n}));
+ showSr(loc);sT=setTimeout(async()=>{try{const r=await tv('/search/shows?q='+encodeURIComponent(v));if(q.value.trim()!=v)return;showSr([...loc,...r.slice(0,6).map(x=>({k:'tv',n:x.show.name,s:'Serie · '+(yr(x.show.premiered)||svc(x.show)),v:x.show.id}))])}catch(e){}},250)};
+render();
+</script></body></html>
